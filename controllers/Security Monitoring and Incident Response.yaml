@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Security Monitoring and Incident Response"
+
+Resources:
+  MyCloudTrail:
+    Type: "AWS::CloudTrail::Trail"
+    Properties:
+      TrailName: "MyCloudTrail"
+      S3BucketName: "my-cloudtrail-logs-bucket"
+      IsLogging: true
+      EnableLogFileValidation: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      CloudWatchLogsLogGroupArn: !GetAtt MyCloudWatchLogsGroup.Arn
+
+  MyCloudWatchLogsGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: "MyCloudTrailLogs"
+
+  MyCloudWatchAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "UnauthorizedAccessAlarm"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      EvaluationPeriods: 1
+      MetricName: "UnauthorizedAccessCount"
+      Namespace: "CloudTrailMetrics"
+      Period: 300
+      Statistic: "Sum"
+      Threshold: 1
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref MySNSTopic
+
+  MySNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "SecurityIncidentTopic"
+
+Outputs:
+  CloudTrailName:
+    Description: "Name of the CloudTrail"
+    Value: !Ref MyCloudTrail

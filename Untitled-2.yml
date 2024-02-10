@@ -1,0 +1,114 @@
+//Serverless Web Application:
+
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Ninebit-dev:
+    Type: String
+    Description: Name for the S3 bucket
+  LambdaFunctionName:
+    Type: String
+    Description: Name for the Lambda function
+    
+Resources:
+  Ninebit-dev:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref BucketName
+
+Outputs:
+  Ninebit-dev:
+    Value: !Ref MyS3Bucket
+    Description: Name of the created S3 bucket
+
+  MyLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: MyLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: MyLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+              
+                Action:
+                  - 's3:GetObject'
+                Resource: !GetAtt MyS3Bucket.Arn
+  
+  MyLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Handler: index.handler
+      Role: !GetAtt MyLambdaExecutionRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 10
+      MemorySize: 128
+      Code:
+        S3Bucket: !Ref MyS3Bucket
+        S3Key: lambda-code.zip              
+  
+  MyApiGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: MyApi
+
+  MyApiGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref MyApiGateway
+      ParentId: !GetAtt MyApiGateway.RootResourceId
+      PathPart: 'myresource'
+
+  MyApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref MyApiGatewayResource
+      RestApiId: !Ref MyApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations
+  
+  MyDynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: MyDynamoDBTable
+      AttributeDefinitions:
+        - AttributeName: UserId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UserId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  
+  MyCognitoUserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: MyCognitoUserPool
+
+  MyCognitoUserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      UserPoolId: !Ref MyCognitoUserPool
+      ClientName: MyCognitoUserPoolClient
+
+  MyCognitoIdentityPool:
+    Type: 'AWS::Cognito::IdentityPool'
+    Properties:
+      IdentityPoolName: MyCognitoIdentityPool
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref MyCognitoUserPoolClient
+          ProviderName: !GetAtt MyCognitoUserPool.ProviderName      

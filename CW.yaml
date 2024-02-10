@@ -1,0 +1,100 @@
+Resources:
+  MyS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-cloudtrail-bucket
+
+  MySNSAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "AlertsTopic"
+
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 1
+      MaxSize: 5
+      DesiredCapacity: 1
+      LaunchConfigurationName: MyLaunchConfig
+      AvailabilityZones:
+        - us-east-1a
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
+        - subnet-0123456789abcdef0
+
+  MyLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0c55b159cbfafe1f0
+      InstanceType: t2.micro
+      KeyName: MyKeyPair
+
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c55b159cbfafe1f0
+      InstanceType: t2.micro
+      KeyName: MyKeyPair
+      SecurityGroupIds:
+        - sg-0123456789abcdef0  # Specify your security group ID
+      SubnetId: subnet-0123456789abcdef0
+
+  CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CPU alarm for auto scaling
+      AlarmActions:
+        - Ref: MySNSAlertTopic
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '3'
+      Threshold: '90'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref MyAutoScalingGroup
+
+  EC2StatusCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: EC2 instance status check alarm
+      AlarmActions:
+        - Ref: MySNSAlertTopic
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '1'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref MyAutoScalingGroup
+
+  MyAutoScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref MyAutoScalingGroup
+      AdjustmentType: ChangeInCapacity
+      Cooldown: '300'
+      ScalingAdjustment: 1
+
+  MyCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      S3BucketName: my-cloudtrail-bucket
+      IsLogging: true
+      EnableLogFileValidation: true
+
+  MyCloudTrailEventSelector:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: MyCloudTrail
+    Properties:
+      TrailName: !Ref MyCloudTrail
+      EventSelectors:
+        - EventSelectorName: EC2TerminationEvents
+          IncludeManagementEvents: true
+          ReadWriteType: All

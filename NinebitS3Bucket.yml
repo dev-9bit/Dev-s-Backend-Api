@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  NinebitDev:
+    Type: String
+    Description: Name for the S3 bucket
+
+Resources:
+  NinebitS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref NinebitDev
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+Outputs:
+  NinebitDevBucket:
+    Value: !Ref NinebitS3Bucket
+    Description: Name of the created S3 bucket

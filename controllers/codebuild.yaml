@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Description: URL of the GitHub repository for the Angular application
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket for hosting the Angular artifacts
+
+Resources:
+  CodeBuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Name: MyAngularCodeBuildProject
+      Description: CodeBuild project for building Angular application
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:4.0
+      BuildSpec: buildspec.yml
+      Artifacts:
+        Type: CODEPIPELINE
+
+  CodeBuildServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 's3:*'
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref S3BucketName
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+
+Outputs:
+  CodeBuildProjectName:
+    Description: Name of the CodeBuild project
+    Value: !Ref CodeBuildProject
+
+  S3BucketNameOutput:
+    Description: Name of the S3 bucket
+    Value: !Ref S3Bucket
+
+
+# CREATE CFT for this -A — The developer will be working on his Angular application and push the code to a Github repo.
+
+# B — The developer within his AWS Account, creates two things: A Codebuild process & and an S3 Bucket.
+
+# C — The developer manages the overall IAM authorization between the different pieces.
+
+# D — The developer configures S3 buckets as a Static web hoster + Bucket policy to make the buckets accessible by the public.
+
+# E — Codebuild process will pull the code from the Github repo and do the necessary build process using Angular Cli.
+
+# F — Codebuild process will then pushes the resulted artifacts (dist folder) to the S3 bucket of choice.

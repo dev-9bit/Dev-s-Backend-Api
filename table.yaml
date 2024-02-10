@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  NinebitDev:
+    Type: String
+    Description: Name for the S3 bucket
+
+Resources:
+  NinebitS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref NinebitDev
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  MyEC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-12345678  # Replace with a valid AMI ID
+      KeyName: MyKeyPair     # Replace with your EC2 key pair
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          service httpd start
+          chkconfig httpd on
+          amazon-linux-extras install -y nginx1
+          service nginx start
+          chkconfig nginx on
+
+  MyApiGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: MyApi
+
+  MyApiGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref MyApiGateway
+      ParentId: !GetAtt MyApiGateway.RootResourceId
+      PathPart: 'myresource'
+
+  MyApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref MyApiGatewayResource
+      RestApiId: !Ref MyApiGateway
+      Integration:
+        IntegrationHttpMethod: GET
+        Type: HTTP
+        Uri: !Sub "http://${MyEC2Instance.PublicIp}/"
+
+Outputs:
+  S3BucketName:
+    Value: !Ref NinebitS3Bucket
+    Description: Name of the created S3 bucket
+
+  S3BucketWebsiteURL:
+    Value: !Sub "http://${NinebitS3Bucket}.s3-website-${AWS::Region}.amazonaws.com/"
+    Description: URL of the hosted React web page
+
+  EC2InstanceId:
+    Value: !Ref MyEC2Instance
+    Description: ID of the created EC2 instance
+
+  ApiGatewayEndpoint:
+    Value: !Sub "https://${MyApiGateway}.execute-api.${AWS::Region}.amazonaws.com/myresource"
+    Description: Endpoint of the created API Gateway
